@@ -32,3 +32,9 @@ def test_index_counts_visits(monkeypatch):
 def test_health_ok(monkeypatch):
     client = make_client(monkeypatch)
     assert client.get("/health").status_code == 200
+
+
+def test_version(monkeypatch):
+    monkeypatch.setenv("APP_VERSION", "abc123")
+    client = make_client(monkeypatch)
+    assert client.get("/version").text == "abc123\n"

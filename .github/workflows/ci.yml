@@ -40,3 +40,26 @@ jobs:
           context: ./app
           push: true
           tags: ghcr.io/feruz92/compose-lab-web:${{ github.sha }}
+
+  deploy:
+    needs: image
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 5
+    concurrency:
+      group: production
+      cancel-in-progress: false
+    steps:
+      - name: Configure SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          umask 077
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" | tr -d '\r' > ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" | tr -d '\r' > ~/.ssh/known_hosts
+      - name: Deploy
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        run: ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "deploy@$DEPLOY_HOST" "$GITHUB_SHA"

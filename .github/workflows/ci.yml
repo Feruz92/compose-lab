@@ -22,7 +22,7 @@ jobs:
         working-directory: app
 
   image:
-    needs: test
+    needs: [test, integration]
     if: github.event_name == 'push'
     runs-on: ubuntu-24.04
     permissions:
@@ -63,3 +63,22 @@ jobs:
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
         run: ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "deploy@$DEPLOY_HOST" "$GITHUB_SHA"
+
+  integration:
+    needs: test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      WEB_TAG: ci
+      REDIS_PASSWORD: ci-only-not-a-secret
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - name: Build image
+        run: docker build -t "ghcr.io/feruz92/compose-lab-web:$WEB_TAG" ./app
+      - name: Start stack
+        run: docker compose up -d --wait --wait-timeout 90
+      - name: Smoke test
+        run: ./scripts/smoke-test.sh http://127.0.0.1:8082 "$WEB_TAG"
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose logs --tail=50

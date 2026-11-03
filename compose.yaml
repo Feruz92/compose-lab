@@ -3,7 +3,7 @@ services:
     image: ghcr.io/feruz92/compose-lab-web:${WEB_TAG:?set WEB_TAG}
     restart: unless-stopped
     environment:
-      REDIS_HOST: redis-typo
+      REDIS_HOST: redis
       APP_VERSION: ${WEB_TAG:?set WEB_TAG}
       REDIS_PASSWORD: ${REDIS_PASSWORD:?set it in .env}
     ports:

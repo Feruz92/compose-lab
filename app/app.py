@@ -13,7 +13,7 @@ cache = redis.Redis(
 
 @app.get("/")
 def index():
-    return f"Visits: {cache.incr('hits')}\n"
+    return f"Hits: {cache.incr('hits')}\n"
 
 
 @app.get("/health")

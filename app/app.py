@@ -20,3 +20,8 @@ def index():
 def health():
     cache.ping()
     return "ok\n"
+
+
+@app.get("/version")
+def version():
+    return f"{os.environ.get('APP_VERSION', 'unknown')}\n"

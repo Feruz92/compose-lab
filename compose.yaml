@@ -4,6 +4,7 @@ services:
     restart: unless-stopped
     environment:
       REDIS_HOST: redis
+      APP_VERSION: ${WEB_TAG:?set WEB_TAG}
       REDIS_PASSWORD: ${REDIS_PASSWORD:?set it in .env}
     ports:
       - "127.0.0.1:8082:8000"

@@ -1,6 +1,6 @@
 services:
   web:
-    build: ./app
+    image: ghcr.io/feruz92/compose-lab-web:${WEB_TAG:?set WEB_TAG}
     restart: unless-stopped
     environment:
       REDIS_HOST: redis

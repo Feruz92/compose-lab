@@ -17,7 +17,7 @@ docker compose cp redis:/data/dump.rdb "$TMP"
 
 # проверяем снимок той же версией Redis, что работает в проекте
 REDIS_IMAGE="$(docker compose config --images | grep '^redis:')"
-docker run --rm -v "$TMP":/backup.rdb:ro "$REDIS_IMAGE" redis-check-rdb /backup.rdb > /dev/null
+docker run --rm --entrypoint redis-check-rdb -v "$TMP":/backup.rdb:ro "$REDIS_IMAGE" /backup.rdb > /dev/null
 
 chmod 600 "$TMP"
 mv "$TMP" "$DEST/redis_$STAMP.rdb"

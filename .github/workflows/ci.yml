@@ -8,6 +8,9 @@ on:
 permissions:
   contents: read
 
+env:
+  IMAGE: ghcr.io/feruz92/compose-lab-web:${{ github.sha }}
+
 jobs:
   test:
     runs-on: ubuntu-24.04
@@ -21,25 +24,63 @@ jobs:
       - run: pytest -q
         working-directory: app
 
+  build:
+    needs: test
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - name: Build image
+        run: docker build -t "$IMAGE" ./app
+      - name: Save image
+        run: docker save "$IMAGE" | gzip > image.tar.gz
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: image
+          path: image.tar.gz
+          retention-days: 1
+
+  integration:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      WEB_TAG: ${{ github.sha }}
+      REDIS_PASSWORD: ci-only-not-a-secret
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/download-artifact@v8.0.2
+        with:
+          name: image
+      - name: Load image
+        run: docker load -i image.tar.gz
+      - name: Start stack
+        run: docker compose up -d --wait --wait-timeout 90
+      - name: Smoke test
+        run: ./scripts/smoke-test.sh http://127.0.0.1:8082 "$WEB_TAG"
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose logs --tail=50
+
   image:
-    needs: [test, integration]
+    needs: integration
     if: github.event_name == 'push'
     runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/download-artifact@v8.0.2
+        with:
+          name: image
+      - name: Load image
+        run: docker load -i image.tar.gz
       - uses: docker/login-action@v4.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/build-push-action@v7.4.0
-        with:
-          context: ./app
-          push: true
-          tags: ghcr.io/feruz92/compose-lab-web:${{ github.sha }}
+      - name: Push image
+        run: docker push "$IMAGE"
 
   deploy:
     needs: image
@@ -63,22 +104,3 @@ jobs:
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
         run: ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "deploy@$DEPLOY_HOST" "$GITHUB_SHA"
-
-  integration:
-    needs: test
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    env:
-      WEB_TAG: ci
-      REDIS_PASSWORD: ci-only-not-a-secret
-    steps:
-      - uses: actions/checkout@v7.0.1
-      - name: Build image
-        run: docker build -t "ghcr.io/feruz92/compose-lab-web:$WEB_TAG" ./app
-      - name: Start stack
-        run: docker compose up -d --wait --wait-timeout 90
-      - name: Smoke test
-        run: ./scripts/smoke-test.sh http://127.0.0.1:8082 "$WEB_TAG"
-      - name: Show logs on failure
-        if: failure()
-        run: docker compose logs --tail=50

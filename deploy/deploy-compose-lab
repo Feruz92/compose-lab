@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+APP_DIR=/srv/compose-lab
+SHA="${SSH_ORIGINAL_COMMAND:-${1:-}}"
+
+# ввод приходит извне, поэтому принимаем только полный SHA коммита
+[[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "Error: expected a full commit SHA" >&2; exit 2; }
+
+cd "$APP_DIR"
+
+# два деплоя одновременно не запускаем
+exec 9> .deploy.lock
+flock -n 9 || { echo "Error: another deploy is running" >&2; exit 6; }
+
+# выкатываем только коммиты из main
+git fetch --quiet origin main
+git merge-base --is-ancestor "$SHA" origin/main || { echo "Error: $SHA is not in main" >&2; exit 3; }
+
+PREV_SHA="$(sed -n 's/^WEB_TAG=//p' .env)"
+
+deploy_to() {
+  git checkout --quiet --detach "$1" &&
+    sed -i "s/^WEB_TAG=.*/WEB_TAG=$1/" .env &&
+    docker compose up -d --wait --wait-timeout 90
+}
+
+if deploy_to "$SHA"; then
+  echo "Deployed $SHA"
+  exit 0
+fi
+
+echo "Deploy of $SHA failed, rolling back to $PREV_SHA" >&2
+deploy_to "$PREV_SHA" || { echo "Error: rollback failed" >&2; exit 5; }
+echo "Rolled back to $PREV_SHA" >&2
+exit 4
